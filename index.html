@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票预测助手</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2c7fb8;
+            --accent-color: #ff7f0e;
+            --bg-color: #f8f9fa;
+            --text-color: #333;
+            --light-gray: #e9ecef;
+            --dark-gray: #6c757d;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px 0;
+            margin-bottom: 30px;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 500;
+            color: var(--primary-color);
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 30px;
+        }
+        
+        .chat-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+        }
+        
+        .chat-header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            max-width: 80%;
+        }
+        
+        .user-message {
+            margin-left: auto;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 18px 18px 0 18px;
+            padding: 10px 15px;
+        }
+        
+        .bot-message {
+            background-color: var(--light-gray);
+            border-radius: 18px 18px 18px 0;
+            padding: 10px 15px;
+        }
+        
+        .chat-input {
+            display: flex;
+            padding: 15px;
+            background-color: var(--light-gray);
+        }
+        
+        .chat-input input {
+            flex: 1;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 20px;
+            outline: none;
+            font-size: 16px;
+        }
+        
+        .chat-input button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 10px 20px;
+            margin-left: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        
+        .chat-input button:hover {
+            background-color: #1c6ea4;
+        }
+        
+        .chart-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chart-header {
+            margin-bottom: 20px;
+        }
+        
+        .chart-area {
+            flex: 1;
+            position: relative;
+        }
+        
+        .stock-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        
+        .stock-price {
+            font-size: 24px;
+            font-weight: 500;
+        }
+        
+        .stock-change {
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: 500;
+        }
+        
+        .positive {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .negative {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .chat-container, .chart-container {
+                height: 500px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container header-content">
+            <div class="logo">股票预测助手</div>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="main-content">
+            <div class="chat-container">
+                <div class="chat-header">
+                    <h2>智能助手</h2>
+                </div>
+                <div class="chat-messages" id="chat-messages">
+                    <div class="message bot-message">
+                        您好！我是您的股票预测助手。请输入您想查询的股票代码（例如：AAPL、MSFT）。
+                    </div>
+                </div>
+                <div class="chat-input">
+                    <input type="text" id="user-input" placeholder="输入您的问题..." autocomplete="off">
+                    <button id="send-btn">发送</button>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h2 id="stock-symbol">股票走势图</h2>
+                    <div class="stock-info" id="stock-info" style="display: none;">
+                        <div class="stock-price" id="stock-price">--</div>
+                        <!-- <div class="stock-change" id="stock-change">--</div> -->
+                    </div>
+                </div>
+                <div class="chart-area" id="chart-area">
+                    <canvas id="stock-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        let stockChart = null;
+        
+        document.getElementById('send-btn').addEventListener('click', sendMessage);
+        document.getElementById('user-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        function sendMessage() {
+            const userInput = document.getElementById('user-input').value.trim();
+            if (!userInput) return;
+            
+            // 添加用户消息到聊天区域
+            addMessage(userInput, 'user');
+            document.getElementById('user-input').value = '';
+            
+            // 发送请求到服务器
+            fetch('http://localhost:5001/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ query: userInput }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // 添加机器人回复
+                addMessage(data.message, 'bot');
+                
+                // 更新图表
+                if (data.plot_data) {
+                    updateChart(data.symbol, data.plot_data);
+                    updateStockInfo(data.symbol, data.prediction);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                addMessage('抱歉，请求处理出错，请稍后再试。', 'bot');
+            });
+        }
+        
+        function addMessage(text, sender) {
+            const chatMessages = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.classList.add(sender === 'user' ? 'user-message' : 'bot-message');
+            messageDiv.textContent = text;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        function updateChart(symbol, plotData) {
+            const ctx = document.getElementById('stock-chart').getContext('2d');
+            
+            // 如果图表已存在，销毁它
+            if (stockChart) {
+                stockChart.destroy();
+            }
+            
+            // 更新股票标题
+            document.getElementById('stock-symbol').textContent = `${symbol} 股票走势图`;
+            
+            // 合并历史数据和预测数据
+            const allData = [...plotData.history, ...plotData.predictions];
+            
+            // 创建新图表
+            stockChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: plotData.dates,
+                    datasets: [
+                        {
+                            label: '历史价格',
+                            data: [...plotData.history, null],
+                            borderColor: '#2c7fb8',
+                            backgroundColor: 'rgba(44, 127, 184, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0.1
+                        },
+                        {
+                            label: '预测价格',
+                            data: [...Array(plotData.history.length).fill(null), ...plotData.predictions],
+                            borderColor: '#ff7f0e',
+                            borderDash: [5, 5],
+                            borderWidth: 2,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#ff7f0e'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateStockInfo(symbol, prediction) {
+            const stockInfo = document.getElementById('stock-info');
+            const stockPrice = document.getElementById('stock-price');
+            const stockChange = document.getElementById('stock-change');
+            
+            stockInfo.style.display = 'flex';
+            stockPrice.textContent = `预测价格: $${prediction.toFixed(2)}`;
+            
+            // // 假设我们有前一天的价格
+            // const lastPrice = prediction * 0.98; // 这里只是示例，实际应该使用真实数据
+            // const change = prediction - lastPrice;
+            // const changePercent = (change / lastPrice) * 100;
+            
+            // stockChange.textContent = `${change > 0 ? '+' : ''}${change.toFixed(2)} (${changePercent.toFixed(2)}%)`;
+            // stockChange.className = 'stock-change ' + (change >= 0 ? 'positive' : 'negative');
+        }
+    </script>
+</body>
+</html>

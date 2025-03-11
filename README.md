@@ -12,7 +12,7 @@ cd C:\Users\Administrator\Desktop\ELEC && Start-Process powershell -ArgumentList
 
 
 
-4、打开`index.html`，输入apple（aapl）或者microsoft（msft），得到预测结果，下面是示例
+4、打开`index.html`，输入apple（aapl）或者microsoft（msft），得到预测结果
 
 
 

@@ -1,15 +1,18 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>股票预测助手</title>
+    <title>Stock Prediction Oracle</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary-color: #2c7fb8;
             --accent-color: #ff7f0e;
             --secondary-color: #2ca02c;
+            --tertiary-color: #d62728;
+            --quaternary-color: #9467bd;
+            --quinary-color: #8c564b;
             --bg-color: #f8f9fa;
             --text-color: #333;
             --light-gray: #e9ecef;
@@ -30,7 +33,7 @@
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
         }
@@ -109,8 +112,67 @@
         
         .main-content {
             display: grid;
-            grid-template-columns: 1fr 2fr;
-            gap: 30px;
+            grid-template-columns: 250px 1fr 2fr;
+            gap: 20px;
+        }
+        
+        .sidebar {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            height: 600px;
+            overflow-y: auto;
+        }
+        
+        .sidebar-header {
+            margin-bottom: 20px;
+            font-size: 18px;
+            font-weight: 500;
+        }
+        
+        .cached-symbols {
+            margin-bottom: 20px;
+        }
+        
+        .symbol-item {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--light-gray);
+        }
+        
+        .symbol-name {
+            font-weight: 500;
+        }
+        
+        .add-symbol-container {
+            margin-top: 20px;
+        }
+        
+        .add-symbol-form {
+            display: flex;
+            margin-top: 10px;
+        }
+        
+        .add-symbol-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--light-gray);
+            border-radius: 5px 0 0 5px;
+            outline: none;
+        }
+        
+        .add-symbol-btn {
+            padding: 8px 12px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 0 5px 5px 0;
+            cursor: pointer;
         }
         
         .chat-container {
@@ -195,51 +257,96 @@
             height: 600px;
             display: flex;
             flex-direction: column;
+            overflow-y: auto;
         }
         
         .chart-header {
             margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .chart-title {
+            font-size: 18px;
+            font-weight: 500;
+        }
+        
+        .feature-selector {
+            padding: 5px 10px;
+            border: 1px solid var(--light-gray);
+            border-radius: 5px;
+            background-color: white;
+            outline: none;
         }
         
         .chart-area {
             flex: 1;
+            margin-bottom: 20px;
+        }
+        
+        .chart-wrapper {
             position: relative;
+            height: 300px;
+            margin-bottom: 20px;
         }
         
         .stock-info {
             display: flex;
             flex-direction: column;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: var(--light-gray);
+            border-radius: 5px;
         }
         
-        .stock-price {
-            font-size: 18px;
+        .feature-name {
             font-weight: 500;
             margin-bottom: 5px;
         }
         
-        .lstm-price {
-            color: var(--primary-color);
+        .prediction-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
         }
         
-        .rf-price {
-            color: var(--secondary-color);
+        .prediction-label {
+            color: var(--dark-gray);
         }
         
-        .stock-change {
-            padding: 5px 10px;
-            border-radius: 5px;
+        .prediction-value {
             font-weight: 500;
         }
         
-        .positive {
-            background-color: #d4edda;
-            color: #155724;
+        .lstm-prediction {
+            color: var(--primary-color);
         }
         
-        .negative {
-            background-color: #f8d7da;
-            color: #721c24;
+        .rf-prediction {
+            color: var(--secondary-color);
+        }
+        
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr 2fr;
+            }
+            
+            .sidebar {
+                grid-column: 1 / 2;
+                grid-row: 1 / 2;
+            }
+            
+            .chat-container {
+                grid-column: 1 / 2;
+                grid-row: 2 / 3;
+            }
+            
+            .chart-container {
+                grid-column: 2 / 3;
+                grid-row: 1 / 3;
+                height: auto;
+            }
         }
         
         @media (max-width: 768px) {
@@ -247,8 +354,24 @@
                 grid-template-columns: 1fr;
             }
             
-            .chat-container, .chart-container {
-                height: 500px;
+            .sidebar,
+            .chat-container,
+            .chart-container {
+                grid-column: 1 / 2;
+                height: auto;
+                min-height: 400px;
+            }
+            
+            .sidebar {
+                grid-row: 1 / 2;
+            }
+            
+            .chat-container {
+                grid-row: 2 / 3;
+            }
+            
+            .chart-container {
+                grid-row: 3 / 4;
             }
         }
     </style>
@@ -256,15 +379,15 @@
 <body>
     <header>
         <div class="container header-content">
-            <div class="logo">股票预测助手</div>
+            <div class="logo">Stock Prediction Oracle</div>
             <div class="header-controls">
-                <button id="update-data-btn" class="update-btn">更新数据</button>
-                <span id="loading-indicator" class="loading-indicator">更新中...</span>
+                <button id="update-all-btn" class="update-btn">Update All Data</button>
+                <span id="loading-indicator" class="loading-indicator">Updating...</span>
                 <div id="progress-container" class="progress-container">
                     <div class="progress-bar">
                         <div id="progress-bar-fill" class="progress-bar-fill"></div>
                     </div>
-                    <div id="progress-text" class="progress-text">正在准备更新...</div>
+                    <div id="progress-text" class="progress-text">Preparing update...</div>
                 </div>
             </div>
         </div>
@@ -272,31 +395,51 @@
     
     <div class="container">
         <div class="main-content">
+            <div class="sidebar">
+                <div class="sidebar-header">Cached Symbols</div>
+                <div id="cached-symbols" class="cached-symbols">
+                    <!-- Symbols will be populated here -->
+                </div>
+                <div class="add-symbol-container">
+                    <div class="sidebar-header">Add Symbol</div>
+                    <div class="add-symbol-form">
+                        <input type="text" id="add-symbol-input" class="add-symbol-input" placeholder="Enter symbol (e.g. AAPL)">
+                        <button id="add-symbol-btn" class="add-symbol-btn">Add</button>
+                    </div>
+                </div>
+            </div>
+            
             <div class="chat-container">
                 <div class="chat-header">
-                    <h2>智能助手</h2>
+                    <h2>Oracle Assistant</h2>
                 </div>
                 <div class="chat-messages" id="chat-messages">
                     <div class="message bot-message">
-                        您好！我是您的股票预测助手。请输入您想查询的股票代码（例如：AAPL、MSFT）。
+                        Hello, I'm the Oracle. How can I help you today?
                     </div>
                 </div>
                 <div class="chat-input">
-                    <input type="text" id="user-input" placeholder="输入您的问题..." autocomplete="off">
-                    <button id="send-btn">发送</button>
+                    <input type="text" id="user-input" placeholder="Ask about stock prices..." autocomplete="off">
+                    <button id="send-btn">Send</button>
                 </div>
             </div>
             
             <div class="chart-container">
                 <div class="chart-header">
-                    <h2 id="stock-symbol">股票走势图</h2>
-                    <div class="stock-info" id="stock-info" style="display: none;">
-                        <div class="stock-price lstm-price" id="lstm-price">--</div>
-                        <div class="stock-price rf-price" id="rf-price">--</div>
-                    </div>
+                    <h2 id="stock-symbol">Stock Forecast</h2>
+                    <select id="feature-selector" class="feature-selector">
+                        <option value="Close">Close</option>
+                        <option value="High">High</option>
+                        <option value="Low">Low</option>
+                        <option value="Open">Open</option>
+                        <option value="Volume">Volume</option>
+                    </select>
                 </div>
-                <div class="chart-area" id="chart-area">
-                    <canvas id="stock-chart"></canvas>
+                <div id="charts-area" class="chart-area">
+                    <!-- Charts will be populated here -->
+                </div>
+                <div id="predictions-container">
+                    <!-- Prediction info will be populated here -->
                 </div>
             </div>
         </div>
@@ -304,9 +447,12 @@
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        let stockChart = null;
+        let stockCharts = {};
         let updateStatusInterval = null;
+        let currentSymbol = null;
+        let currentFeature = 'Close';
         
+        // Initialize UI elements
         document.getElementById('send-btn').addEventListener('click', sendMessage);
         document.getElementById('user-input').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
@@ -314,23 +460,202 @@
             }
         });
         
-        // 添加更新数据按钮点击事件
-        document.getElementById('update-data-btn').addEventListener('click', updateData);
+        document.getElementById('update-all-btn').addEventListener('click', updateAllData);
+        document.getElementById('add-symbol-btn').addEventListener('click', addNewSymbol);
+        document.getElementById('feature-selector').addEventListener('change', function() {
+            currentFeature = this.value;
+            if (currentSymbol) {
+                updateChartView(currentSymbol, currentFeature);
+            }
+        });
         
-        function updateData() {
-            const updateBtn = document.getElementById('update-data-btn');
+        // Load available symbols on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            loadAvailableSymbols();
+        });
+        
+        function loadAvailableSymbols() {
+            fetch('http://localhost:5001/symbols')
+            .then(response => response.json())
+            .then(data => {
+                const symbolsContainer = document.getElementById('cached-symbols');
+                symbolsContainer.innerHTML = '';
+                
+                data.symbols.forEach(symbol => {
+                    addSymbolToSidebar(symbol);
+                });
+            })
+            .catch(error => {
+                console.error('Error loading symbols:', error);
+            });
+        }
+        
+        function addSymbolToSidebar(symbol) {
+            const symbolsContainer = document.getElementById('cached-symbols');
+            
+            const symbolItem = document.createElement('div');
+            symbolItem.classList.add('symbol-item');
+            
+            const symbolName = document.createElement('div');
+            symbolName.classList.add('symbol-name');
+            symbolName.textContent = symbol;
+            
+            const updateBtn = document.createElement('button');
+            updateBtn.classList.add('update-btn');
+            updateBtn.textContent = 'Update';
+            updateBtn.addEventListener('click', function() {
+                updateSymbolData(symbol);
+            });
+            
+            symbolItem.appendChild(symbolName);
+            symbolItem.appendChild(updateBtn);
+            
+            // Add click event to select this symbol
+            symbolItem.addEventListener('click', function(e) {
+                if (e.target !== updateBtn) {
+                    selectSymbol(symbol);
+                }
+            });
+            
+            symbolsContainer.appendChild(symbolItem);
+        }
+        
+        function selectSymbol(symbol) {
+            currentSymbol = symbol;
+            document.getElementById('stock-symbol').textContent = `${symbol} Forecast`;
+            
+            // Update the chart view
+            updateChartView(symbol, currentFeature);
+        }
+        
+        function updateChartView(symbol, feature) {
+            // Show loading or placeholder
+            document.getElementById('charts-area').innerHTML = '<div style="text-align:center;padding:20px;">Loading chart data...</div>';
+            document.getElementById('predictions-container').innerHTML = '';
+            
+            // Request data for this symbol and feature
+            fetch(`http://localhost:5001/predict`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ query: `Show me ${symbol} ${feature}` }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    document.getElementById('charts-area').innerHTML = `<div style="text-align:center;padding:20px;">Error: ${data.error}</div>`;
+                    return;
+                }
+                
+                updateChart(data);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('charts-area').innerHTML = `<div style="text-align:center;padding:20px;">Failed to load chart data</div>`;
+            });
+        }
+        
+        function addNewSymbol() {
+            const symbolInput = document.getElementById('add-symbol-input');
+            const symbol = symbolInput.value.trim().toUpperCase();
+            
+            if (!symbol) {
+                return;
+            }
+            
+            // Show loading
+            symbolInput.disabled = true;
+            document.getElementById('add-symbol-btn').disabled = true;
+            
+            fetch('http://localhost:5001/add_symbol', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ symbol: symbol }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addMessage(`Adding symbol: ${symbol}. ${data.message}`, 'bot');
+                    
+                    // Check if the symbol is already in the sidebar
+                    const existingSymbols = Array.from(document.querySelectorAll('.symbol-name')).map(el => el.textContent);
+                    if (!existingSymbols.includes(symbol)) {
+                        addSymbolToSidebar(symbol);
+                    }
+                    
+                    // Start polling update status
+                    startUpdateStatusPolling();
+                } else {
+                    addMessage(`Failed to add symbol: ${data.message || data.error}`, 'bot');
+                }
+                
+                // Reset input
+                symbolInput.value = '';
+                symbolInput.disabled = false;
+                document.getElementById('add-symbol-btn').disabled = false;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                addMessage('Error adding symbol. Please try again.', 'bot');
+                symbolInput.disabled = false;
+                document.getElementById('add-symbol-btn').disabled = false;
+            });
+        }
+        
+        function updateSymbolData(symbol) {
+            const updateBtn = document.getElementById('update-all-btn');
             const loadingIndicator = document.getElementById('loading-indicator');
             const progressContainer = document.getElementById('progress-container');
             
-            // 禁用按钮并显示加载指示器和进度条
+            // Disable button and show loading indicators
             updateBtn.disabled = true;
             loadingIndicator.style.display = 'inline';
             progressContainer.style.display = 'block';
             
-            // 添加系统消息
-            addMessage('正在开始更新数据，这可能需要几分钟时间...', 'bot');
+            // Add system message
+            addMessage(`Updating data for ${symbol}. This may take a few minutes...`, 'bot');
             
-            // 发送更新数据请求
+            // Send update request for specific symbol
+            fetch('http://localhost:5001/update_data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ symbol: symbol }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Start polling update status
+                startUpdateStatusPolling();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // Reset button state and hide loading indicators
+                updateBtn.disabled = false;
+                loadingIndicator.style.display = 'none';
+                progressContainer.style.display = 'none';
+                
+                addMessage('Error updating data. Please try again later.', 'bot');
+            });
+        }
+        
+        function updateAllData() {
+            const updateBtn = document.getElementById('update-all-btn');
+            const loadingIndicator = document.getElementById('loading-indicator');
+            const progressContainer = document.getElementById('progress-container');
+            
+            // Disable button and show loading indicators
+            updateBtn.disabled = true;
+            loadingIndicator.style.display = 'inline';
+            progressContainer.style.display = 'block';
+            
+            // Add system message
+            addMessage('Starting data update. This may take a few minutes...', 'bot');
+            
+            // Send update data request
             fetch('http://localhost:5001/update_data', {
                 method: 'POST',
                 headers: {
@@ -339,59 +664,61 @@
             })
             .then(response => response.json())
             .then(data => {
-                // 开始轮询更新状态
+                // Start polling update status
                 startUpdateStatusPolling();
             })
             .catch(error => {
                 console.error('Error:', error);
-                // 恢复按钮状态并隐藏加载指示器
+                // Reset button state and hide loading indicators
                 updateBtn.disabled = false;
                 loadingIndicator.style.display = 'none';
                 progressContainer.style.display = 'none';
                 
-                addMessage('更新数据时发生错误，请稍后再试。', 'bot');
+                addMessage('Error updating data. Please try again later.', 'bot');
             });
         }
         
         function startUpdateStatusPolling() {
-            // 清除之前的轮询
+            // Clear previous polling
             if (updateStatusInterval) {
                 clearInterval(updateStatusInterval);
             }
             
-            // 每秒查询一次更新状态
+            // Poll update status every second
             updateStatusInterval = setInterval(() => {
                 fetch('http://localhost:5001/update_status')
                 .then(response => response.json())
                 .then(status => {
                     updateProgressUI(status);
                     
-                    // 如果更新完成或出错，停止轮询
+                    // If update complete or error, stop polling
                     if (status.step === 'complete' || status.step === 'error') {
                         clearInterval(updateStatusInterval);
                         
-                        const updateBtn = document.getElementById('update-data-btn');
+                        const updateBtn = document.getElementById('update-all-btn');
                         const loadingIndicator = document.getElementById('loading-indicator');
                         
-                        // 恢复按钮状态
+                        // Reset button state
                         updateBtn.disabled = false;
                         loadingIndicator.style.display = 'none';
                         
-                        // 根据结果显示消息
+                        // Show result message
                         if (status.step === 'complete') {
-                            addMessage('数据和模型已成功更新！现在您可以查询最新的预测结果。', 'bot');
+                            addMessage('Data and models successfully updated! You can now query for the latest predictions.', 'bot');
+                            // Refresh available symbols
+                            loadAvailableSymbols();
                         } else {
-                            addMessage(`更新失败: ${status.message}`, 'bot');
+                            addMessage(`Update failed: ${status.message}`, 'bot');
                         }
                         
-                        // 3秒后隐藏进度条
+                        // Hide progress bar after 3 seconds
                         setTimeout(() => {
                             document.getElementById('progress-container').style.display = 'none';
                         }, 3000);
                     }
                 })
                 .catch(error => {
-                    console.error('获取更新状态出错:', error);
+                    console.error('Error fetching update status:', error);
                 });
             }, 1000);
         }
@@ -400,13 +727,13 @@
             const progressBarFill = document.getElementById('progress-bar-fill');
             const progressText = document.getElementById('progress-text');
             
-            // 更新进度条
+            // Update progress bar
             progressBarFill.style.width = `${status.progress}%`;
             
-            // 更新状态文本
+            // Update status text
             progressText.textContent = status.message;
             
-            // 如果有新状态，添加到聊天记录中
+            // Add new status to chat if different
             if (status.step && status.step !== 'start' && status.message) {
                 const lastMessage = document.querySelector('.chat-messages .message:last-child');
                 if (lastMessage && lastMessage.textContent !== status.message) {
@@ -419,11 +746,11 @@
             const userInput = document.getElementById('user-input').value.trim();
             if (!userInput) return;
             
-            // 添加用户消息到聊天区域
+            // Add user message to chat
             addMessage(userInput, 'user');
             document.getElementById('user-input').value = '';
             
-            // 发送请求到服务器
+            // Send request to server
             fetch('http://localhost:5001/predict', {
                 method: 'POST',
                 headers: {
@@ -433,18 +760,32 @@
             })
             .then(response => response.json())
             .then(data => {
-                // 添加机器人回复
+                // Add bot reply
+                if (data.error) {
+                    if (data.error.includes('Unsupported symbol') || data.error.includes('valid company/symbol')) {
+                        addMessage("I don't recognize that stock symbol. Please add it in the sidebar or try one of the available symbols.", 'bot');
+                    } else {
+                        addMessage(data.error, 'bot');
+                    }
+                    return;
+                }
+                
                 addMessage(data.message, 'bot');
                 
-                // 更新图表
-                if (data.plot_data) {
-                    updateChart(data.symbol, data.plot_data);
-                    updateStockInfo(data.symbol, data.lstm_prediction, data.rf_prediction);
+                // Update chart and current symbol
+                if (data.symbol) {
+                    currentSymbol = data.symbol;
+                    // If a specific feature was requested, switch to it
+                    if (data.feature) {
+                        currentFeature = data.feature;
+                        document.getElementById('feature-selector').value = currentFeature;
+                    }
+                    updateChart(data);
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                addMessage('抱歉，请求处理出错，请稍后再试。', 'bot');
+                addMessage('Sorry, an error occurred while processing your request. Please try again.', 'bot');
             });
         }
         
@@ -458,58 +799,156 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
         
-        function updateChart(symbol, plotData) {
-            const ctx = document.getElementById('stock-chart').getContext('2d');
+        function updateChart(data) {
+            // Clear existing charts
+            document.getElementById('charts-area').innerHTML = '';
+            document.getElementById('predictions-container').innerHTML = '';
             
-            // 如果图表已存在，销毁它
-            if (stockChart) {
-                stockChart.destroy();
+            // Update the stock symbol title
+            document.getElementById('stock-symbol').textContent = `${data.symbol} Forecast`;
+            
+            if (!data.plot_data || !data.plot_data.features) {
+                return;
             }
             
-            // 更新股票标题
-            document.getElementById('stock-symbol').textContent = `${symbol} 股票走势图`;
+            // Extract all features from the data
+            const features = Object.keys(data.plot_data.features);
             
-            // 准备数据集
+            // If we have a specific feature to show
+            if (currentFeature && features.includes(currentFeature)) {
+                // Create chart for current feature
+                createFeatureChart(data.symbol, currentFeature, data.plot_data);
+            } else {
+                // Create charts for each feature (up to 5)
+                for (const feature of features) {
+                    createFeatureChart(data.symbol, feature, data.plot_data);
+                }
+            }
+        }
+        
+        function createFeatureChart(symbol, feature, plotData) {
+            const featureData = plotData.features[feature];
+            if (!featureData) return;
+            
+            // Create chart container
+            const chartContainer = document.createElement('div');
+            chartContainer.classList.add('chart-wrapper');
+            chartContainer.id = `chart-container-${feature}`;
+            
+            const chartTitle = document.createElement('h3');
+            chartTitle.textContent = `${feature} Price`;
+            chartTitle.style.marginBottom = '10px';
+            
+            const canvas = document.createElement('canvas');
+            canvas.id = `chart-${feature}`;
+            
+            chartContainer.appendChild(chartTitle);
+            chartContainer.appendChild(canvas);
+            
+            document.getElementById('charts-area').appendChild(chartContainer);
+            
+            // Create prediction info
+            createPredictionInfo(symbol, feature, featureData, plotData.dates);
+            
+            // Prepare chart data
+            const ctx = canvas.getContext('2d');
+            
+            // Destroy existing chart if any
+            if (stockCharts[feature]) {
+                stockCharts[feature].destroy();
+            }
+            
+            // Prepare data
+            const history = featureData.history;
+            const lstm_predictions = featureData.lstm_predictions || [];
+            const rf_predictions = featureData.rf_predictions || [];
+            const highlight_index = featureData.highlight_index;
+            
+            const historyData = [...history, null, null, null]; // Add nulls for prediction days
+            
+            // Prepare prediction data - convert predictions to arrays with nulls for history days
+            const lstmPredictionData = Array(history.length).fill(null);
+            const rfPredictionData = Array(history.length).fill(null);
+            
+            // Add prediction values
+            for (let i = 0; i < lstm_predictions.length; i++) {
+                lstmPredictionData.push(lstm_predictions[i]);
+            }
+            
+            for (let i = 0; i < rf_predictions.length; i++) {
+                rfPredictionData.push(rf_predictions[i]);
+            }
+            
+            // Data for highlighted point
+            let highlightData = Array(plotData.dates.length).fill(null);
+            if (highlight_index !== null) {
+                // Use LSTM value if available, otherwise RF
+                if (lstm_predictions && highlight_index >= history.length) {
+                    highlightData[highlight_index] = lstm_predictions[highlight_index - history.length];
+                } else if (rf_predictions && highlight_index >= history.length) {
+                    highlightData[highlight_index] = rf_predictions[highlight_index - history.length];
+                }
+            }
+            
+            // Create datasets
             const datasets = [
                 {
-                    label: '历史价格',
-                    data: [...plotData.history, null, null],
-                    borderColor: '#2c7fb8',
+                    label: 'History',
+                    data: historyData,
+                    borderColor: 'rgb(44, 127, 184)',
                     backgroundColor: 'rgba(44, 127, 184, 0.1)',
+                    fill: false,
+                    tension: 0.1,
                     borderWidth: 2,
-                    pointRadius: 0,
-                    tension: 0.1
+                    pointRadius: 0
                 }
             ];
             
-            // 添加LSTM预测数据集
-            if (plotData.predictions.lstm !== null) {
+            // Add LSTM prediction dataset if available
+            if (lstm_predictions && lstm_predictions.length > 0) {
                 datasets.push({
-                    label: 'LSTM预测',
-                    data: [...Array(plotData.history.length).fill(null), plotData.predictions.lstm],
-                    borderColor: '#ff7f0e',
-                    borderDash: [5, 5],
+                    label: 'LSTM Prediction',
+                    data: lstmPredictionData,
+                    borderColor: 'rgb(255, 127, 14)',
+                    backgroundColor: 'rgba(255, 127, 14, 0.1)',
+                    fill: false,
+                    tension: 0.1,
                     borderWidth: 2,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#ff7f0e'
+                    pointRadius: 3,
+                    borderDash: [5, 5]
                 });
             }
             
-            // 添加随机森林预测数据集
-            if (plotData.predictions.rf !== null) {
+            // Add RF prediction dataset if available
+            if (rf_predictions && rf_predictions.length > 0) {
                 datasets.push({
-                    label: '随机森林预测',
-                    data: [...Array(plotData.history.length).fill(null), plotData.predictions.rf],
-                    borderColor: '#2ca02c',
-                    borderDash: [5, 5],
+                    label: 'Random Forest Prediction',
+                    data: rfPredictionData,
+                    borderColor: 'rgb(44, 160, 44)',
+                    backgroundColor: 'rgba(44, 160, 44, 0.1)',
+                    fill: false,
+                    tension: 0.1,
                     borderWidth: 2,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#2ca02c'
+                    pointRadius: 3,
+                    borderDash: [5, 5]
                 });
             }
             
-            // 创建新图表
-            stockChart = new Chart(ctx, {
+            // Add highlight dataset if there's a highlighted point
+            if (highlight_index !== null) {
+                datasets.push({
+                    label: 'Requested Date',
+                    data: highlightData,
+                    borderColor: 'rgb(214, 39, 40)',
+                    backgroundColor: 'rgba(214, 39, 40, 0.8)',
+                    pointRadius: 8,
+                    pointHoverRadius: 10,
+                    showLine: false
+                });
+            }
+            
+            // Create chart
+            stockCharts[feature] = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: plotData.dates,
@@ -518,15 +957,6 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                        },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false
-                        }
-                    },
                     scales: {
                         x: {
                             grid: {
@@ -538,31 +968,82 @@
                                 color: 'rgba(0, 0, 0, 0.05)'
                             }
                         }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
                     }
                 }
             });
         }
         
-        function updateStockInfo(symbol, lstmPrediction, rfPrediction) {
-            const stockInfo = document.getElementById('stock-info');
-            const lstmPrice = document.getElementById('lstm-price');
-            const rfPrice = document.getElementById('rf-price');
+        function createPredictionInfo(symbol, feature, featureData, dates) {
+            const predictionsContainer = document.getElementById('predictions-container');
             
-            stockInfo.style.display = 'flex';
+            const featureInfo = document.createElement('div');
+            featureInfo.classList.add('stock-info');
             
-            if (lstmPrediction !== null) {
-                lstmPrice.textContent = `LSTM预测价格: $${lstmPrediction.toFixed(2)}`;
-                lstmPrice.style.display = 'block';
-            } else {
-                lstmPrice.style.display = 'none';
+            const featureName = document.createElement('div');
+            featureName.classList.add('feature-name');
+            featureName.textContent = `${feature} Predictions`;
+            
+            featureInfo.appendChild(featureName);
+            
+            // Add predictions for next 3 days
+            const lstm_predictions = featureData.lstm_predictions || [];
+            const rf_predictions = featureData.rf_predictions || [];
+            
+            // Only add if we have future dates
+            if (dates.length > 30) {
+                for (let i = 0; i < 3 && i < lstm_predictions.length; i++) {
+                    const predictionRow = document.createElement('div');
+                    predictionRow.classList.add('prediction-row');
+                    
+                    const dateLabel = document.createElement('div');
+                    dateLabel.classList.add('prediction-label');
+                    dateLabel.textContent = dates[30 + i]; // 30 days of history + future days
+                    
+                    predictionRow.appendChild(dateLabel);
+                    
+                    // If we have predictions for this day
+                    if (lstm_predictions[i] !== undefined || rf_predictions[i] !== undefined) {
+                        const predictionsDiv = document.createElement('div');
+                        
+                        if (lstm_predictions[i] !== undefined) {
+                            const lstmValue = document.createElement('span');
+                            lstmValue.classList.add('prediction-value', 'lstm-prediction');
+                            lstmValue.textContent = `LSTM: $${lstm_predictions[i].toFixed(2)}`;
+                            predictionsDiv.appendChild(lstmValue);
+                        }
+                        
+                        if (lstm_predictions[i] !== undefined && rf_predictions[i] !== undefined) {
+                            predictionsDiv.appendChild(document.createTextNode(' | '));
+                        }
+                        
+                        if (rf_predictions[i] !== undefined) {
+                            const rfValue = document.createElement('span');
+                            rfValue.classList.add('prediction-value', 'rf-prediction');
+                            rfValue.textContent = `RF: $${rf_predictions[i].toFixed(2)}`;
+                            predictionsDiv.appendChild(rfValue);
+                        }
+                        
+                        predictionRow.appendChild(predictionsDiv);
+                    } else {
+                        const noValue = document.createElement('div');
+                        noValue.textContent = 'No prediction available';
+                        predictionRow.appendChild(noValue);
+                    }
+                    
+                    featureInfo.appendChild(predictionRow);
+                }
             }
             
-            if (rfPrediction !== null) {
-                rfPrice.textContent = `随机森林预测价格: $${rfPrediction.toFixed(2)}`;
-                rfPrice.style.display = 'block';
-            } else {
-                rfPrice.style.display = 'none';
-            }
+            predictionsContainer.appendChild(featureInfo);
         }
     </script>
 </body>

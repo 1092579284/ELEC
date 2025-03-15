@@ -5,8 +5,8 @@ from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 import os
 
-def create_model(input_shape):
-    """创建单步预测LSTM模型"""
+def create_model(input_shape, forecast_days=3):
+    """Create multi-feature LSTM model for multi-day forecasting"""
     model = Sequential([
         LSTM(128, return_sequences=True, input_shape=input_shape),
         Dropout(0.3),
@@ -14,7 +14,7 @@ def create_model(input_shape):
         Dropout(0.3),
         LSTM(32),
         Dropout(0.3),
-        Dense(1)  # 输出1天预测
+        Dense(forecast_days)  # Output forecast_days predictions
     ])
     
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
@@ -25,25 +25,26 @@ def create_model(input_shape):
     return model
 
 
-def train_model(symbol, output_folder, epochs=100, batch_size=64):
-    """训练模型"""
-    X_path = os.path.join(output_folder, f'X_{symbol}.npy')
-    y_path = os.path.join(output_folder, f'y_{symbol}.npy')
-    model_path = os.path.join(output_folder, f'model_{symbol}.keras')
+def train_model(symbol, output_folder, feature, epochs=100, batch_size=64, forecast_days=3):
+    """Train model for a specific feature"""
+    symbol_dir = os.path.join(output_folder, symbol)
+    X_path = os.path.join(symbol_dir, f'X_{symbol}.npy')
+    y_path = os.path.join(symbol_dir, f'y_{symbol}_{feature}.npy')
+    model_path = os.path.join(symbol_dir, f'model_{symbol}_{feature}.keras')
 
-    # 加载数据
+    # Load data
     X = np.load(X_path)
     y = np.load(y_path)
     
-    # 数据分割
+    # Data split
     split = int(0.8 * len(X))
     X_train, X_val = X[:split], X[split:]
     y_train, y_val = y[:split], y[split:]
 
-    # 创建模型
-    model = create_model((X.shape[1], 1))
+    # Create model
+    model = create_model((X.shape[1], X.shape[2]), forecast_days)
     
-    # 回调函数
+    # Callbacks
     callbacks = [
         EarlyStopping(patience=15, restore_best_weights=True),
         ModelCheckpoint(
@@ -53,7 +54,7 @@ def train_model(symbol, output_folder, epochs=100, batch_size=64):
         )
     ]
 
-    # 训练
+    # Train
     history = model.fit(
         X_train, y_train,
         epochs=epochs,
@@ -63,21 +64,31 @@ def train_model(symbol, output_folder, epochs=100, batch_size=64):
         verbose=1
     )
 
-    # 保存最终模型
+    # Save final model
     model.save(model_path)
-    print(f"Model saved to {model_path}")
+    print(f"Model for {feature} saved to {model_path}")
     return history
 
 def main():
     output_folder = "project_files"
     symbols = ['AAPL', 'MSFT']
+    features = ['Close', 'High', 'Low', 'Open', 'Volume']
     
     for symbol in symbols:
-        print(f"\nTraining {symbol}...")
-        if not os.path.exists(os.path.join(output_folder, f'X_{symbol}.npy')):
+        symbol_dir = os.path.join(output_folder, symbol)
+        os.makedirs(symbol_dir, exist_ok=True)
+        
+        print(f"\nTraining models for {symbol}...")
+        if not os.path.exists(os.path.join(symbol_dir, f'X_{symbol}.npy')):
             print(f"Data not found for {symbol}")
             continue
-        train_model(symbol, output_folder)
+            
+        for feature in features:
+            if os.path.exists(os.path.join(symbol_dir, f'y_{symbol}_{feature}.npy')):
+                print(f"Training {symbol} - {feature} model...")
+                train_model(symbol, output_folder, feature)
+            else:
+                print(f"Data for {feature} not found")
 
 if __name__ == "__main__":
     main()

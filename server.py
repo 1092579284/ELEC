@@ -1,119 +1,193 @@
-import socket
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import json
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 import yfinance as yf
 from datetime import datetime, timedelta
+import os
+
+
+app = Flask(__name__)
+CORS(app)  # 允许跨域请求
 
 class OracleServer:
-    def __init__(self, host='localhost', port=5001):  # Changed port to 5001
+    def __init__(self, host='localhost', port=5001):
         self.host = host
         self.port = port
         self.models = {}
         self.norm_params = {}
+        self.history_data = {}
         self.symbols = ['AAPL', 'MSFT']
-        self.load_models()
+        self.output_folder = "project_files"
+        self.load_resources()
         
-    def load_models(self):
-        """Load trained models and normalization parameters"""
+    def load_resources(self):
+        """加载所有必需资源"""
         for symbol in self.symbols:
             try:
-                self.models[symbol] = load_model(f'model_{symbol}.keras')  # Changed to .keras extension
-                self.norm_params[symbol] = np.load(f'norm_params_{symbol}.npy')
-                print(f"Loaded model for {symbol}")
-            except Exception as e:
-                print(f"Error loading model for {symbol}: {e}")
-    
-    def predict_next_day(self, symbol):
-        """Make prediction for next day's stock price"""
-        try:
-            if symbol not in self.models:
-                return f"Model for {symbol} is not loaded."
+                # 加载模型
+                model_path = os.path.join(self.output_folder, f'model_{symbol}.keras')
+                self.models[symbol] = load_model(model_path)
                 
-            # Get recent data
-            stock = yf.Ticker(symbol)
-            df = stock.history(period='70d')  # Get enough data for sequence
-            close_prices = df['Close'].values
-            
-            # Normalize data
+                # 加载归一化参数
+                norm_path = os.path.join(self.output_folder, f'norm_params_{symbol}.npy')
+                self.norm_params[symbol] = np.load(norm_path)
+                
+                # 加载历史数据
+                history_path = os.path.join(self.output_folder, f'full_history_{symbol}.npy')
+                self.history_data[symbol] = np.load(history_path)
+                
+                print(f"Loaded resources for {symbol}")
+            except Exception as e:
+                print(f"Error loading {symbol}: {str(e)}")
+    
+    def recursive_predict(self, symbol, days=1):
+        """预测单日价格"""
+        try:
+            # 获取最新数据
             mean, std = self.norm_params[symbol]
-            normalized_data = (close_prices - mean) / std
+            last_60_days = self.history_data[symbol][-60:]
+            normalized_seq = (last_60_days - mean) / std
             
-            # Prepare sequence for prediction
-            sequence = normalized_data[-60:].reshape(1, 60, 1)
+            # 准备输入序列
+            current_seq = normalized_seq.reshape(1, 60, 1)
             
-            # Make prediction
-            pred_normalized = self.models[symbol].predict(sequence, verbose=0)[0][0]
+            # 预测
+            pred = self.models[symbol].predict(current_seq, verbose=0)[0][0]
             
-            # Denormalize prediction
-            prediction = (pred_normalized * std) + mean
+            # 反归一化
+            prediction = pred * std + mean
             
+            # 误差修正
+            last_known_price = self.history_data[symbol][-1]
+            if abs(prediction - last_known_price) / last_known_price > 0.05:
+                correction = last_known_price / prediction
+                prediction = prediction * correction
+                
             return prediction
             
         except Exception as e:
-            return f"Error making prediction: {e}"
+            print(f"Prediction error: {str(e)}")
+            return None
+
+    def apply_error_correction(self, predictions, last_price):
+        """误差修正策略"""
+        if abs(predictions[0] - last_price) / last_price > 0.05:
+            correction = last_price / predictions[0]
+            return predictions * correction
+        return predictions
+    
+    def get_plot_data(self, symbol):
+        """生成图表数据"""
+        history = self.history_data[symbol][-30:].tolist()
+        prediction = self.recursive_predict(symbol)
+        
+        dates = [
+            (datetime.now() - timedelta(days=30-i)).strftime('%Y-%m-%d')
+            for i in range(30)
+        ]
+        
+        pred_date = [(datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')]
+        
+        return {
+            'history': history,
+            'predictions': [prediction],
+            'dates': dates + pred_date
+        }
+
     
     def process_request(self, request):
-        """Process client request and return response"""
+        """处理所有请求为1日预测"""
         try:
-            request = request.lower()
+            req = request.lower().strip()
+            symbol = None
             
-            # Parse stock symbol from request
-            if 'apple' in request or 'aapl' in request:
+            # 简化符号识别逻辑
+            if any(kw in req for kw in ['aapl', 'apple']):
                 symbol = 'AAPL'
-            elif 'microsoft' in request or 'msft' in request:
+            elif any(kw in req for kw in ['msft', 'microsoft']):
                 symbol = 'MSFT'
-            else:
-                return "I can only predict Apple (AAPL) or Microsoft (MSFT) stock prices."
             
-            prediction = self.predict_next_day(symbol)
+            if not symbol:
+                return json.dumps({'error': 'Unsupported symbol'})
             
-            if isinstance(prediction, float):
-                response = f"Based on my analysis, {symbol}'s stock price tomorrow will be approximately ${prediction:.2f}"
-            else:
-                response = str(prediction)
+            # 返回1日预测
+            pred = self.recursive_predict(symbol)
+            if pred is None:
+                return json.dumps({'error': 'Prediction failed'})
                 
-            return response
+            plot_data = self.get_plot_data(symbol)
+            return json.dumps({
+                'symbol': symbol,
+                'prediction': pred.tolist(),
+                'message': f"1-Day forecast for {symbol}: {pred[-1]:.2f} (Final day)",
+                'plot_data': plot_data
+            })
             
         except Exception as e:
-            return f"Error processing request: {e}"
+            return json.dumps({'error': str(e)})
     
     def start(self):
-        """Start the server"""
-        try:
-            server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # Allow socket reuse
-            server_socket.bind((self.host, self.port))
-            server_socket.listen(1)
-            print(f"Oracle server listening on {self.host}:{self.port}")
+        """启动服务器"""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind((self.host, self.port))
+            s.listen()
+            print(f"Server listening on {self.host}:{self.port}")
             
             while True:
-                client_socket, address = server_socket.accept()
-                print(f"Connection from {address}")
-                
+                conn, addr = s.accept()
+                print(f"Connected by {addr}")
                 try:
-                    while True:  # Keep connection alive for multiple requests
-                        request = client_socket.recv(1024).decode('utf-8')
-                        if not request or request.lower() in ['exit', 'quit']:
-                            print(f"Connection from {address} closed.")
+                    while True:
+                        data = conn.recv(1024).decode('utf-8')
+                        if not data or data.lower() in ['exit', 'quit']:
                             break
-                        
-                        # Process request and send response
-                        response = self.process_request(request)
-                        client_socket.send(response.encode('utf-8'))
-                        
-                except Exception as e:
-                    print(f"Error handling client: {e}")
+                            
+                        response = self.process_request(data)
+                        conn.sendall(response.encode('utf-8'))
                 finally:
-                    client_socket.close()
-                    
-        except Exception as e:
-            print(f"Server error: {e}")
-        finally:
-            server_socket.close()
+                    conn.close()
+    
 
+
+oracle = OracleServer()
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    try:
+        data = request.json
+        query = data.get('query', '').lower().strip()
+        
+        # 简化符号识别逻辑
+        symbol = None
+        if any(kw in query for kw in ['aapl', 'apple']):
+            symbol = 'AAPL'
+        elif any(kw in query for kw in ['msft', 'microsoft']):
+            symbol = 'MSFT'
+        
+        if not symbol:
+            return jsonify({'error': '不支持的股票代码'})
+        
+        # 获取预测
+        prediction = oracle.recursive_predict(symbol)
+        if prediction is None:
+            return jsonify({'error': '预测失败'})
+        
+        plot_data = oracle.get_plot_data(symbol)
+        
+        return jsonify({
+            'symbol': symbol,
+            'prediction': float(prediction),
+            'message': f"{symbol} 明日预测价格: ${prediction:.2f}",
+            'plot_data': plot_data
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 if __name__ == "__main__":
-    server = OracleServer()
-    server.start()
+    oracle.load_resources()
+    app.run(host='localhost', port=5001, debug=True)

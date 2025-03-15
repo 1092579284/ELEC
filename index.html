@@ -327,6 +327,79 @@
             color: var(--secondary-color);
         }
         
+        .chart-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .chart-type-selector {
+            padding: 5px 10px;
+            border: 1px solid var(--light-gray);
+            border-radius: 5px;
+            background-color: white;
+            outline: none;
+        }
+        
+        .expand-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .expand-btn:hover {
+            background-color: #1c6ea4;
+        }
+        
+        .fullscreen-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.95);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        
+        .fullscreen-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .fullscreen-title {
+            font-size: 24px;
+            font-weight: 500;
+        }
+        
+        .close-fullscreen {
+            background-color: var(--tertiary-color);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .fullscreen-chart-container {
+            flex: 1;
+            width: 100%;
+            height: calc(100% - 60px);
+        }
+        
         @media (max-width: 1200px) {
             .main-content {
                 grid-template-columns: 1fr 2fr;
@@ -381,7 +454,6 @@
         <div class="container header-content">
             <div class="logo">Stock Prediction Oracle</div>
             <div class="header-controls">
-                <button id="update-all-btn" class="update-btn">Update All Data</button>
                 <span id="loading-indicator" class="loading-indicator">Updating...</span>
                 <div id="progress-container" class="progress-container">
                     <div class="progress-bar">
@@ -397,15 +469,16 @@
         <div class="main-content">
             <div class="sidebar">
                 <div class="sidebar-header">Cached Symbols</div>
+                <div class="cached-symbols-container" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div>Available Stocks</div>
+                    <button id="refresh-symbols-btn" class="update-btn">Refresh List</button>
+                </div>
                 <div id="cached-symbols" class="cached-symbols">
                     <!-- Symbols will be populated here -->
                 </div>
-                <div class="add-symbol-container">
-                    <div class="sidebar-header">Add Symbol</div>
-                    <div class="add-symbol-form">
-                        <input type="text" id="add-symbol-input" class="add-symbol-input" placeholder="Enter symbol (e.g. AAPL)">
-                        <button id="add-symbol-btn" class="add-symbol-btn">Add</button>
-                    </div>
+                <div class="update-all-container" style="margin-top: 20px;">
+                    <div class="sidebar-header">Update Data</div>
+                    <button id="update-all-btn" class="update-btn" style="width: 100%; margin-top: 10px;">Update All Data</button>
                 </div>
             </div>
             
@@ -427,13 +500,15 @@
             <div class="chart-container">
                 <div class="chart-header">
                     <h2 id="stock-symbol">Stock Forecast</h2>
-                    <select id="feature-selector" class="feature-selector">
-                        <option value="Close">Close</option>
-                        <option value="High">High</option>
-                        <option value="Low">Low</option>
-                        <option value="Open">Open</option>
-                        <option value="Volume">Volume</option>
-                    </select>
+                    <div style="display: flex; align-items: center;">
+                        <select id="chart-type-selector" class="chart-type-selector">
+                            <option value="Close">Close</option>
+                            <option value="High">High</option>
+                            <option value="Low">Low</option>
+                            <option value="Open">Open</option>
+                            <option value="Volume">Volume</option>
+                        </select>
+                    </div>
                 </div>
                 <div id="charts-area" class="chart-area">
                     <!-- Charts will be populated here -->
@@ -445,12 +520,26 @@
         </div>
     </div>
     
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Fullscreen chart overlay -->
+    <div id="fullscreen-overlay" class="fullscreen-overlay">
+        <div class="fullscreen-header">
+            <div class="fullscreen-title" id="fullscreen-title">Stock Chart</div>
+            <button id="close-fullscreen" class="close-fullscreen">Close</button>
+        </div>
+        <div id="fullscreen-chart-container" class="fullscreen-chart-container"></div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1"></script>
+    <!-- Add adapter for Chart.js for Timeseries -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0"></script>
     <script>
         let stockCharts = {};
         let updateStatusInterval = null;
         let currentSymbol = null;
         let currentFeature = 'Close';
+        let currentChartType = 'line';
+        let fullscreenChart = null;
+        let currentFullscreenData = null;
         
         // Initialize UI elements
         document.getElementById('send-btn').addEventListener('click', sendMessage);
@@ -461,13 +550,18 @@
         });
         
         document.getElementById('update-all-btn').addEventListener('click', updateAllData);
-        document.getElementById('add-symbol-btn').addEventListener('click', addNewSymbol);
-        document.getElementById('feature-selector').addEventListener('change', function() {
+        document.getElementById('refresh-symbols-btn').addEventListener('click', loadAvailableSymbols);
+        
+        document.getElementById('chart-type-selector').addEventListener('change', function() {
             currentFeature = this.value;
+            currentChartType = 'line';
+            
             if (currentSymbol) {
                 updateChartView(currentSymbol, currentFeature);
             }
         });
+        
+        document.getElementById('close-fullscreen').addEventListener('click', closeFullscreen);
         
         // Load available symbols on page load
         window.addEventListener('DOMContentLoaded', function() {
@@ -553,55 +647,6 @@
             .catch(error => {
                 console.error('Error:', error);
                 document.getElementById('charts-area').innerHTML = `<div style="text-align:center;padding:20px;">Failed to load chart data</div>`;
-            });
-        }
-        
-        function addNewSymbol() {
-            const symbolInput = document.getElementById('add-symbol-input');
-            const symbol = symbolInput.value.trim().toUpperCase();
-            
-            if (!symbol) {
-                return;
-            }
-            
-            // Show loading
-            symbolInput.disabled = true;
-            document.getElementById('add-symbol-btn').disabled = true;
-            
-            fetch('http://localhost:5001/add_symbol', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ symbol: symbol }),
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    addMessage(`Adding symbol: ${symbol}. ${data.message}`, 'bot');
-                    
-                    // Check if the symbol is already in the sidebar
-                    const existingSymbols = Array.from(document.querySelectorAll('.symbol-name')).map(el => el.textContent);
-                    if (!existingSymbols.includes(symbol)) {
-                        addSymbolToSidebar(symbol);
-                    }
-                    
-                    // Start polling update status
-                    startUpdateStatusPolling();
-                } else {
-                    addMessage(`Failed to add symbol: ${data.message || data.error}`, 'bot');
-                }
-                
-                // Reset input
-                symbolInput.value = '';
-                symbolInput.disabled = false;
-                document.getElementById('add-symbol-btn').disabled = false;
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                addMessage('Error adding symbol. Please try again.', 'bot');
-                symbolInput.disabled = false;
-                document.getElementById('add-symbol-btn').disabled = false;
             });
         }
         
@@ -814,15 +859,14 @@
             // Extract all features from the data
             const features = Object.keys(data.plot_data.features);
             
-            // If we have a specific feature to show
-            if (currentFeature && features.includes(currentFeature)) {
-                // Create chart for current feature
+            if (features.includes(currentFeature)) {
+                // Create line chart for selected feature
                 createFeatureChart(data.symbol, currentFeature, data.plot_data);
-            } else {
-                // Create charts for each feature (up to 5)
-                for (const feature of features) {
-                    createFeatureChart(data.symbol, feature, data.plot_data);
-                }
+            } else if (features.length > 0) {
+                // Fallback to first available feature
+                currentFeature = features[0];
+                document.getElementById('chart-type-selector').value = currentFeature;
+                createFeatureChart(data.symbol, currentFeature, data.plot_data);
             }
         }
         
@@ -835,14 +879,28 @@
             chartContainer.classList.add('chart-wrapper');
             chartContainer.id = `chart-container-${feature}`;
             
+            // Add chart controls
+            const chartControls = document.createElement('div');
+            chartControls.classList.add('chart-controls');
+            
             const chartTitle = document.createElement('h3');
             chartTitle.textContent = `${feature} Price`;
-            chartTitle.style.marginBottom = '10px';
+            chartTitle.style.marginBottom = '0';
+            chartControls.appendChild(chartTitle);
+            
+            const expandBtn = document.createElement('button');
+            expandBtn.classList.add('expand-btn');
+            expandBtn.innerHTML = 'Expand <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
+            expandBtn.onclick = function() {
+                openFullscreen(symbol, feature, plotData);
+            };
+            chartControls.appendChild(expandBtn);
+            
+            chartContainer.appendChild(chartControls);
             
             const canvas = document.createElement('canvas');
             canvas.id = `chart-${feature}`;
             
-            chartContainer.appendChild(chartTitle);
             chartContainer.appendChild(canvas);
             
             document.getElementById('charts-area').appendChild(chartContainer);
@@ -862,39 +920,12 @@
             const history = featureData.history;
             const lstm_predictions = featureData.lstm_predictions || [];
             const rf_predictions = featureData.rf_predictions || [];
-            const highlight_index = featureData.highlight_index;
             
-            const historyData = [...history, null, null, null]; // Add nulls for prediction days
-            
-            // Prepare prediction data - convert predictions to arrays with nulls for history days
-            const lstmPredictionData = Array(history.length).fill(null);
-            const rfPredictionData = Array(history.length).fill(null);
-            
-            // Add prediction values
-            for (let i = 0; i < lstm_predictions.length; i++) {
-                lstmPredictionData.push(lstm_predictions[i]);
-            }
-            
-            for (let i = 0; i < rf_predictions.length; i++) {
-                rfPredictionData.push(rf_predictions[i]);
-            }
-            
-            // Data for highlighted point
-            let highlightData = Array(plotData.dates.length).fill(null);
-            if (highlight_index !== null) {
-                // Use LSTM value if available, otherwise RF
-                if (lstm_predictions && highlight_index >= history.length) {
-                    highlightData[highlight_index] = lstm_predictions[highlight_index - history.length];
-                } else if (rf_predictions && highlight_index >= history.length) {
-                    highlightData[highlight_index] = rf_predictions[highlight_index - history.length];
-                }
-            }
-            
-            // Create datasets
+            // Create datasets for each data source
             const datasets = [
                 {
                     label: 'History',
-                    data: historyData,
+                    data: history,
                     borderColor: 'rgb(44, 127, 184)',
                     backgroundColor: 'rgba(44, 127, 184, 0.1)',
                     fill: false,
@@ -906,44 +937,47 @@
             
             // Add LSTM prediction dataset if available
             if (lstm_predictions && lstm_predictions.length > 0) {
+                // Create a dataset that includes the last point of history and the predictions
+                const lstmData = Array(history.length - 1).fill(null);
+                lstmData.push(history[history.length - 1]); // Last historical point
+                
+                // Add prediction points
+                for (const pred of lstm_predictions) {
+                    lstmData.push(pred);
+                }
+                
                 datasets.push({
                     label: 'LSTM Prediction',
-                    data: lstmPredictionData,
+                    data: lstmData,
                     borderColor: 'rgb(255, 127, 14)',
                     backgroundColor: 'rgba(255, 127, 14, 0.1)',
                     fill: false,
                     tension: 0.1,
                     borderWidth: 2,
-                    pointRadius: 3,
-                    borderDash: [5, 5]
+                    pointRadius: 3
                 });
             }
             
             // Add RF prediction dataset if available
             if (rf_predictions && rf_predictions.length > 0) {
+                // Create a dataset that includes the last point of history and the predictions
+                const rfData = Array(history.length - 1).fill(null);
+                rfData.push(history[history.length - 1]); // Last historical point
+                
+                // Add prediction points
+                for (const pred of rf_predictions) {
+                    rfData.push(pred);
+                }
+                
                 datasets.push({
                     label: 'Random Forest Prediction',
-                    data: rfPredictionData,
+                    data: rfData,
                     borderColor: 'rgb(44, 160, 44)',
                     backgroundColor: 'rgba(44, 160, 44, 0.1)',
                     fill: false,
                     tension: 0.1,
                     borderWidth: 2,
-                    pointRadius: 3,
-                    borderDash: [5, 5]
-                });
-            }
-            
-            // Add highlight dataset if there's a highlighted point
-            if (highlight_index !== null) {
-                datasets.push({
-                    label: 'Requested Date',
-                    data: highlightData,
-                    borderColor: 'rgb(214, 39, 40)',
-                    backgroundColor: 'rgba(214, 39, 40, 0.8)',
-                    pointRadius: 8,
-                    pointHoverRadius: 10,
-                    showLine: false
+                    pointRadius: 3
                 });
             }
             
@@ -952,6 +986,157 @@
                 type: 'line',
                 data: {
                     labels: plotData.dates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    }
+                }
+            });
+        }
+        
+        function openFullscreen(symbol, feature, plotData) {
+            const overlay = document.getElementById('fullscreen-overlay');
+            const container = document.getElementById('fullscreen-chart-container');
+            const title = document.getElementById('fullscreen-title');
+            
+            // Clear container
+            container.innerHTML = '';
+            
+            // Set title
+            title.textContent = `${symbol} ${feature} Chart`;
+            
+            // Create canvas
+            const canvas = document.createElement('canvas');
+            canvas.id = 'fullscreen-chart';
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            container.appendChild(canvas);
+            
+            // Show overlay
+            overlay.style.display = 'flex';
+            
+            // Save the original data for the chart
+            currentFullscreenData = {
+                symbol: symbol,
+                feature: feature,
+                plotData: plotData
+            };
+            
+            // Draw chart
+            drawFullscreenFeatureChart(symbol, feature, plotData.features[feature], plotData.dates);
+        }
+        
+        function closeFullscreen() {
+            const overlay = document.getElementById('fullscreen-overlay');
+            overlay.style.display = 'none';
+            
+            if (fullscreenChart) {
+                fullscreenChart.destroy();
+                fullscreenChart = null;
+            }
+        }
+        
+        function drawFullscreenFeatureChart(symbol, feature, featureData, dates) {
+            // Prepare chart data
+            const ctx = document.getElementById('fullscreen-chart').getContext('2d');
+            
+            // Destroy existing chart if any
+            if (fullscreenChart) {
+                fullscreenChart.destroy();
+            }
+            
+            // Prepare data
+            const history = featureData.history;
+            const lstm_predictions = featureData.lstm_predictions || [];
+            const rf_predictions = featureData.rf_predictions || [];
+            
+            // Create datasets
+            const datasets = [
+                {
+                    label: 'History',
+                    data: history,
+                    borderColor: 'rgb(44, 127, 184)',
+                    backgroundColor: 'rgba(44, 127, 184, 0.1)',
+                    fill: false,
+                    tension: 0.1,
+                    borderWidth: 2,
+                    pointRadius: 0
+                }
+            ];
+            
+            // Add LSTM prediction dataset if available
+            if (lstm_predictions && lstm_predictions.length > 0) {
+                // Create a dataset that includes the last point of history and the predictions
+                const lstmData = Array(history.length - 1).fill(null);
+                lstmData.push(history[history.length - 1]); // Last historical point
+                
+                // Add prediction points
+                for (const pred of lstm_predictions) {
+                    lstmData.push(pred);
+                }
+                
+                datasets.push({
+                    label: 'LSTM Prediction',
+                    data: lstmData,
+                    borderColor: 'rgb(255, 127, 14)',
+                    backgroundColor: 'rgba(255, 127, 14, 0.1)',
+                    fill: false,
+                    tension: 0.1,
+                    borderWidth: 2,
+                    pointRadius: 3
+                });
+            }
+            
+            // Add RF prediction dataset if available
+            if (rf_predictions && rf_predictions.length > 0) {
+                // Create a dataset that includes the last point of history and the predictions
+                const rfData = Array(history.length - 1).fill(null);
+                rfData.push(history[history.length - 1]); // Last historical point
+                
+                // Add prediction points
+                for (const pred of rf_predictions) {
+                    rfData.push(pred);
+                }
+                
+                datasets.push({
+                    label: 'Random Forest Prediction',
+                    data: rfData,
+                    borderColor: 'rgb(44, 160, 44)',
+                    backgroundColor: 'rgba(44, 160, 44, 0.1)',
+                    fill: false,
+                    tension: 0.1,
+                    borderWidth: 2,
+                    pointRadius: 3
+                });
+            }
+            
+            // Create chart
+            fullscreenChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
                     datasets: datasets
                 },
                 options: {

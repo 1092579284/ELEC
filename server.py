@@ -114,11 +114,6 @@ class OracleServer:
                         
                         print(f"Saved {feature} data for {sym}")
                 
-                # If it's a new symbol, add to the list
-                if sym not in self.symbols:
-                    self.symbols.append(sym)
-                    print(f"Added new symbol: {sym}")
-                
                 print(f"Successfully downloaded data for {sym}")
             except Exception as e:
                 print(f"Error downloading {sym} data: {str(e)}")
@@ -136,22 +131,40 @@ class OracleServer:
         
         try:
             # Step 1: Download latest data
+            print(f"Starting download for {specific_symbol if specific_symbol else 'all'} stocks...")
             if not self.download_latest_data(specific_symbol):
-                self.update_status = {"step": "error", "message": "Failed to download data", "progress": 0}
+                error_msg = "Failed to download latest data"
+                self.update_status = {"step": "error", "message": error_msg, "progress": 0}
                 self.updating = False
-                return False, "Failed to download latest data"
+                return False, error_msg
             
             # Step 2: Data preprocessing
             self.update_status = {"step": "prepare", "message": "Preprocessing data...", "progress": 40}
-            print("Starting data preprocessing...")
+            print(f"Starting data preprocessing... Symbol: {specific_symbol if specific_symbol else 'all'}")
+            
+            # Check if data preparation script exists
+            if not os.path.exists('data_preparation.py'):
+                error_msg = "Data preparation script data_preparation.py not found"
+                print(error_msg)
+                self.update_status = {"step": "error", "message": error_msg, "progress": 40}
+                self.updating = False
+                return False, error_msg
             
             # If updating a specific symbol, pass it as an argument
+            cmd_args = ['python', 'data_preparation.py']
             if specific_symbol:
-                result1 = subprocess.run(['python', 'data_preparation.py', specific_symbol], 
-                                        capture_output=True, text=True, check=False)
-            else:
-                result1 = subprocess.run(['python', 'data_preparation.py'], 
-                                        capture_output=True, text=True, check=False)
+                cmd_args.append(specific_symbol)
+                
+            print(f"Executing command: {' '.join(cmd_args)}")
+            result1 = subprocess.run(cmd_args, capture_output=True, text=True, check=False)
+            
+            # Print standard output and error
+            print("Data preprocessing standard output:")
+            print(result1.stdout)
+            
+            if result1.stderr:
+                print("Data preprocessing error output:")
+                print(result1.stderr)
             
             if result1.returncode != 0:
                 error_msg = f"Data preprocessing failed: {result1.stderr}"
@@ -162,14 +175,31 @@ class OracleServer:
             
             # Step 3: Train LSTM models
             self.update_status = {"step": "lstm", "message": "Training LSTM models...", "progress": 60}
-            print("Starting LSTM model training...")
+            print(f"Starting LSTM model training... Symbol: {specific_symbol if specific_symbol else 'all'}")
             
+            # Check if LSTM model training script exists
+            if not os.path.exists('train_model.py'):
+                error_msg = "LSTM model training script train_model.py not found"
+                print(error_msg)
+                self.update_status = {"step": "error", "message": error_msg, "progress": 60}
+                self.updating = False
+                return False, error_msg
+            
+            # Build LSTM training command
+            cmd_args = ['python', 'train_model.py']
             if specific_symbol:
-                result2 = subprocess.run(['python', 'train_model.py', specific_symbol], 
-                                        capture_output=True, text=True, check=False)
-            else:
-                result2 = subprocess.run(['python', 'train_model.py'], 
-                                        capture_output=True, text=True, check=False)
+                cmd_args.append(specific_symbol)
+                
+            print(f"Executing command: {' '.join(cmd_args)}")
+            result2 = subprocess.run(cmd_args, capture_output=True, text=True, check=False)
+            
+            # Print standard output and error
+            print("LSTM model training standard output:")
+            print(result2.stdout)
+            
+            if result2.stderr:
+                print("LSTM model training error output:")
+                print(result2.stderr)
             
             if result2.returncode != 0:
                 error_msg = f"LSTM model training failed: {result2.stderr}"
@@ -180,14 +210,31 @@ class OracleServer:
             
             # Step 4: Train Random Forest models
             self.update_status = {"step": "rf", "message": "Training Random Forest models...", "progress": 80}
-            print("Starting Random Forest model training...")
+            print(f"Starting Random Forest model training... Symbol: {specific_symbol if specific_symbol else 'all'}")
             
+            # Check if Random Forest model training script exists
+            if not os.path.exists('train_model_rf.py'):
+                error_msg = "Random Forest model training script train_model_rf.py not found"
+                print(error_msg)
+                self.update_status = {"step": "error", "message": error_msg, "progress": 80}
+                self.updating = False
+                return False, error_msg
+            
+            # Build Random Forest training command
+            cmd_args = ['python', 'train_model_rf.py']
             if specific_symbol:
-                result3 = subprocess.run(['python', 'train_model_rf.py', specific_symbol], 
-                                        capture_output=True, text=True, check=False)
-            else:
-                result3 = subprocess.run(['python', 'train_model_rf.py'], 
-                                        capture_output=True, text=True, check=False)
+                cmd_args.append(specific_symbol)
+                
+            print(f"Executing command: {' '.join(cmd_args)}")
+            result3 = subprocess.run(cmd_args, capture_output=True, text=True, check=False)
+            
+            # Print standard output and error
+            print("Random Forest model training standard output:")
+            print(result3.stdout)
+            
+            if result3.stderr:
+                print("Random Forest model training error output:")
+                print(result3.stderr)
             
             if result3.returncode != 0:
                 error_msg = f"Random Forest model training failed: {result3.stderr}"
@@ -196,10 +243,53 @@ class OracleServer:
                 self.updating = False
                 return False, error_msg
             
-            # Step 5: Reload resources
+            # Step 5: Verify the model files exist
+            if specific_symbol:
+                symbol_dir = os.path.join(self.output_folder, specific_symbol)
+                lstm_model_exists = False
+                rf_model_exists = False
+                
+                for feature in self.features:
+                    lstm_model_path = os.path.join(symbol_dir, f'model_{specific_symbol}_{feature}.keras')
+                    rf_model_path = os.path.join(symbol_dir, f'model_rf_{specific_symbol}_{feature}.joblib')
+                    
+                    if os.path.exists(lstm_model_path):
+                        lstm_model_exists = True
+                        print(f"Found LSTM model file: {lstm_model_path}")
+                    else:
+                        print(f"LSTM model file not found: {lstm_model_path}")
+                        
+                    if os.path.exists(rf_model_path):
+                        rf_model_exists = True
+                        print(f"Found Random Forest model file: {rf_model_path}")
+                    else:
+                        print(f"Random Forest model file not found: {rf_model_path}")
+                
+                if not lstm_model_exists or not rf_model_exists:
+                    print(f"Warning: Not all expected model files were found, but will continue to try loading available models")
+            
+            # Step 6: Reload resources
             self.update_status = {"step": "reload", "message": "Reloading models and data...", "progress": 95}
             print("Reloading models and data...")
+            
+            # Save existing symbols list
+            existing_symbols = list(self.symbols)
+            
+            # If it's a new symbol, ensure it's added to the list
+            if specific_symbol and specific_symbol not in existing_symbols:
+                existing_symbols.append(specific_symbol)
+                print(f"Adding new symbol {specific_symbol} to symbols list")
+            
             self.load_resources()
+            
+            # Verify if models were successfully loaded
+            if specific_symbol:
+                if specific_symbol not in self.models:
+                    print(f"Warning: Models for symbol {specific_symbol} not found after reload")
+                else:
+                    model_count = len(self.models.get(specific_symbol, {}))
+                    rf_model_count = len(self.rf_models.get(specific_symbol, {}))
+                    print(f"Loaded {model_count} LSTM models and {rf_model_count} Random Forest models for {specific_symbol}")
             
             # Update complete
             self.update_status = {"step": "complete", "message": "Data and models successfully updated", "progress": 100}
@@ -211,6 +301,8 @@ class OracleServer:
             error_msg = f"Error during update process: {str(e)}"
             self.update_status = {"step": "error", "message": error_msg, "progress": 0}
             print(error_msg)
+            import traceback
+            traceback.print_exc()
             return False, error_msg
     
     def async_update_data(self, symbol=None):
@@ -230,121 +322,196 @@ class OracleServer:
         """Get list of available symbols"""
         return self.symbols
     
-    def add_new_symbol(self, symbol):
-        """Add and process a new symbol"""
-        try:
-            # Check if symbol is valid
-            stock = yf.Ticker(symbol)
-            info = stock.info
-            if 'regularMarketPrice' not in info or info['regularMarketPrice'] is None:
-                return False, f"Invalid symbol: {symbol}"
-            
-            # Add symbol to list if not already present
-            if symbol not in self.symbols:
-                # Start the update process for this symbol
-                success, message = self.async_update_data(symbol)
-                if success:
-                    return True, f"Adding {symbol}. Data download and model training started."
-                else:
-                    return False, message
-            else:
-                return True, f"{symbol} is already available."
-                
-        except Exception as e:
-            return False, f"Error adding symbol {symbol}: {str(e)}"
-    
     def predict_multiple_days(self, symbol, feature, days=3, model_type='lstm'):
         """Predict multiple days for a specific feature"""
         try:
             if symbol not in self.symbols:
+                print(f"Symbol {symbol} not found in available symbols")
                 return None
                 
             if model_type == 'lstm':
                 if symbol not in self.models or feature not in self.models[symbol]:
+                    print(f"LSTM model for {symbol}-{feature} not found")
                     return None
                 
                 # Get the latest data
                 if symbol not in self.norm_params or feature not in self.history_data[symbol]:
+                    print(f"Normalization params or history data for {symbol}-{feature} not found")
                     return None
                     
                 # Get normalization parameters and history data
                 norm_params = self.norm_params[symbol]
-                last_sequence = self.history_data[symbol][feature][-60:]
                 
-                # Create input sequence with all features
-                input_sequence = []
-                for feat in self.features:
-                    if feat in self.history_data[symbol]:
-                        feat_data = self.history_data[symbol][feat][-60:]
-                        # Normalize
-                        if feat in norm_params:
-                            mean, std = norm_params[feat]
-                            feat_data = (feat_data - mean) / std
-                        input_sequence.append(feat_data)
-                
-                # Stack features to create multi-feature input
-                input_array = np.column_stack(input_sequence)
-                input_array = input_array.reshape(1, 60, len(input_sequence))
-                
-                # Predict
-                predictions = self.models[symbol][feature].predict(input_array, verbose=0)[0]
-                
-                # Denormalize
-                mean, std = norm_params[feature]
-                denorm_predictions = predictions * std + mean
-                
-                # Error correction - compare with last known price
-                last_known_price = self.history_data[symbol][feature][-1]
-                if abs(denorm_predictions[0] - last_known_price) / last_known_price > 0.05:
-                    correction = last_known_price / denorm_predictions[0]
-                    denorm_predictions = denorm_predictions * correction
-                
-                return denorm_predictions
+                try:
+                    # Check if the feature exists in norm_params
+                    if feature not in norm_params:
+                        print(f"Feature {feature} not found in normalization parameters for {symbol}")
+                        return None
+                        
+                    last_sequence = self.history_data[symbol][feature][-60:]
+                    
+                    # Create input sequence with all features
+                    input_sequence = []
+                    feature_count = 0
+                    
+                    for feat in self.features:
+                        if feat in self.history_data[symbol]:
+                            # Verify we have enough data
+                            if len(self.history_data[symbol][feat]) < 60:
+                                print(f"Not enough history data for {symbol}-{feat}: only {len(self.history_data[symbol][feat])} points")
+                                continue
+                                
+                            feat_data = self.history_data[symbol][feat][-60:]
+                            # Normalize only if we have normalization parameters
+                            if feat in norm_params:
+                                mean, std = norm_params[feat]
+                                # Avoid division by zero
+                                if std == 0:
+                                    std = 1
+                                feat_data = (feat_data - mean) / std
+                            input_sequence.append(feat_data)
+                            feature_count += 1
+                    
+                    # Make sure we have at least one feature
+                    if feature_count == 0:
+                        print(f"No valid features found for {symbol}")
+                        return None
+                    
+                    # Stack features to create multi-feature input
+                    input_array = np.column_stack(input_sequence)
+                    input_shape = (1, 60, feature_count)
+                    print(f"Input shape for {symbol}: {input_shape}")
+                    input_array = input_array.reshape(input_shape)
+                    
+                    # Use a try block specifically for prediction
+                    try:
+                        # Ensure input is float32 to avoid retracing issues
+                        input_array = input_array.astype(np.float32)
+                        
+                        # Create a function once for prediction to minimize retracing
+                        if not hasattr(self, '_predict_cache'):
+                            self._predict_cache = {}
+                            
+                        # Create or reuse cached prediction function
+                        cache_key = f"{symbol}_{feature}"
+                        if cache_key not in self._predict_cache:
+                            @tf.function(reduce_retracing=True)
+                            def _predict_fn(inputs):
+                                return self.models[symbol][feature](inputs, training=False)
+                            
+                            self._predict_cache[cache_key] = _predict_fn
+                        
+                        # Use cached prediction function
+                        pred_fn = self._predict_cache[cache_key]
+                        predictions = pred_fn(input_array).numpy()[0]
+                    except Exception as pred_err:
+                        print(f"Prediction error for {symbol}-{feature}: {str(pred_err)}")
+                        print(f"Model input shape: {input_array.shape}")
+                        print(f"Model expects input shape: {self.models[symbol][feature].input_shape}")
+                        return None
+                        
+                    # Denormalize
+                    mean, std = norm_params[feature]
+                    # Avoid division by zero
+                    if std == 0:
+                        std = 1
+                    denorm_predictions = predictions * std + mean
+                    
+                    # Error correction - compare with last known price
+                    last_known_price = self.history_data[symbol][feature][-1]
+                    if abs(denorm_predictions[0] - last_known_price) / last_known_price > 0.05:
+                        correction = last_known_price / denorm_predictions[0]
+                        denorm_predictions = denorm_predictions * correction
+                    
+                    return denorm_predictions
+                except Exception as inner_e:
+                    print(f"Error preparing data for prediction on {symbol}-{feature}: {str(inner_e)}")
+                    return None
                 
             elif model_type == 'rf':
                 if symbol not in self.rf_models or feature not in self.rf_models[symbol]:
+                    print(f"RF model for {symbol}-{feature} not found")
                     return None
                 
                 # Get normalization parameters and history data
                 if symbol not in self.norm_params or feature not in self.history_data[symbol]:
+                    print(f"Normalization params or history data for {symbol}-{feature} not found")
                     return None
                 
-                norm_params = self.norm_params[symbol]
-                
-                # Prepare input for RF model
-                input_sequence = []
-                for feat in self.features:
-                    if feat in self.history_data[symbol]:
-                        feat_data = self.history_data[symbol][feat][-60:]
-                        # Normalize
-                        if feat in norm_params:
-                            mean, std = norm_params[feat]
-                            feat_data = (feat_data - mean) / std
-                        input_sequence.append(feat_data)
-                
-                # Stack features to create multi-feature input
-                input_array = np.column_stack(input_sequence)
-                input_array = input_array.reshape(1, -1)
-                
-                # Predict with RF model
-                predictions = self.rf_models[symbol][feature].predict(input_array)[0]
-                
-                # Denormalize
-                mean, std = norm_params[feature]
-                denorm_predictions = predictions * std + mean
-                
-                # Error correction
-                last_known_price = self.history_data[symbol][feature][-1]
-                if abs(denorm_predictions[0] - last_known_price) / last_known_price > 0.05:
-                    correction = last_known_price / denorm_predictions[0]
-                    denorm_predictions = denorm_predictions * correction
-                
-                return denorm_predictions
+                try:
+                    norm_params = self.norm_params[symbol]
+                    
+                    # Check if the feature exists in norm_params
+                    if feature not in norm_params:
+                        print(f"Feature {feature} not found in normalization parameters for {symbol}")
+                        return None
+                    
+                    # Prepare input for RF model
+                    input_sequence = []
+                    feature_count = 0
+                    
+                    for feat in self.features:
+                        if feat in self.history_data[symbol]:
+                            # Verify we have enough data
+                            if len(self.history_data[symbol][feat]) < 60:
+                                print(f"Not enough history data for {symbol}-{feat}: only {len(self.history_data[symbol][feat])} points")
+                                continue
+                                
+                            feat_data = self.history_data[symbol][feat][-60:]
+                            # Normalize
+                            if feat in norm_params:
+                                mean, std = norm_params[feat]
+                                # Avoid division by zero
+                                if std == 0:
+                                    std = 1
+                                feat_data = (feat_data - mean) / std
+                            input_sequence.append(feat_data)
+                            feature_count += 1
+                    
+                    # Make sure we have at least one feature
+                    if feature_count == 0:
+                        print(f"No valid features found for {symbol}")
+                        return None
+                    
+                    # Stack features to create multi-feature input
+                    input_array = np.column_stack(input_sequence)
+                    input_array = input_array.reshape(1, -1)
+                    
+                    # Predict with RF model
+                    rf_model = self.rf_models[symbol][feature]
+                    if rf_model is None:
+                        print(f"RF model is None for {symbol}-{feature}")
+                        return None
+                        
+                    # Predict with try/except
+                    try:
+                        predictions = rf_model.predict(input_array)[0]
+                    except Exception as rf_err:
+                        print(f"RF prediction error for {symbol}-{feature}: {str(rf_err)}")
+                        return None
+                    
+                    # Denormalize
+                    mean, std = norm_params[feature]
+                    # Avoid division by zero
+                    if std == 0:
+                        std = 1
+                    denorm_predictions = predictions * std + mean
+                    
+                    # Error correction
+                    last_known_price = self.history_data[symbol][feature][-1]
+                    if abs(denorm_predictions[0] - last_known_price) / last_known_price > 0.05:
+                        correction = last_known_price / denorm_predictions[0]
+                        denorm_predictions = denorm_predictions * correction
+                    
+                    return denorm_predictions
+                except Exception as inner_e:
+                    print(f"Error preparing data for RF prediction on {symbol}-{feature}: {str(inner_e)}")
+                    return None
                 
             return None
             
         except Exception as e:
-            print(f"Prediction error ({model_type}): {str(e)}")
+            print(f"Prediction error ({model_type}) for {symbol}-{feature}: {str(e)}")
             return None
     
     def get_plot_data(self, symbol, target_feature=None, target_date=None):
@@ -450,7 +617,22 @@ class OracleServer:
                 # Try to extract company names
                 company_mapping = {
                     'apple': 'AAPL',
-                    'microsoft': 'MSFT'
+                    'microsoft': 'MSFT',
+                    'google': 'GOOGL',
+                    'alphabet': 'GOOGL',
+                    'amazon': 'AMZN',
+                    'netflix': 'NFLX',
+                    'facebook': 'META',
+                    'meta': 'META',
+                    'tesla': 'TSLA',
+                    'ibm': 'IBM',
+                    'intel': 'INTC',
+                    'amd': 'AMD',
+                    'nvidia': 'NVDA',
+                    'oracle': 'ORCL',
+                    'cisco': 'CSCO',
+                    'adobe': 'ADBE',
+                    'salesforce': 'CRM'
                 }
                 
                 for company, sym in company_mapping.items():
@@ -459,7 +641,15 @@ class OracleServer:
                         break
             
             if not symbol:
-                return json.dumps({'error': 'Please specify a valid company/symbol'})
+                return json.dumps({'error': 'Please specify a valid company/stock symbol'})
+            
+            print(f"Processing request for symbol: {symbol}")
+            
+            # Check if we have trained models for this symbol
+            if symbol not in self.models or not self.models[symbol]:
+                error_msg = f"Models for {symbol} not ready yet. Please wait for the data processing and model training to complete."
+                print(error_msg)
+                return json.dumps({'error': error_msg})
             
             # Extract feature
             feature = None
@@ -492,48 +682,72 @@ class OracleServer:
                     target_date = date_kw
                     break
             
+            print(f"Request details: symbol={symbol}, feature={feature}, target_date={target_date}")
+            
             # Get predictions and plot data
             features_to_predict = [feature] if feature else self.features
             predictions = {}
             
+            print(f"Making predictions for features: {features_to_predict}")
             for feat in features_to_predict:
-                lstm_pred = self.predict_multiple_days(symbol, feat)
-                rf_pred = self.predict_multiple_days(symbol, feat, model_type='rf')
-                
-                if lstm_pred is not None or rf_pred is not None:
-                    predictions[feat] = {
-                        'lstm': lstm_pred.tolist() if lstm_pred is not None else None,
-                        'rf': rf_pred.tolist() if rf_pred is not None else None
-                    }
+                try:
+                    if feat not in self.models.get(symbol, {}):
+                        print(f"No model found for {symbol}-{feat}")
+                        continue
+                        
+                    lstm_pred = self.predict_multiple_days(symbol, feat)
+                    rf_pred = self.predict_multiple_days(symbol, feat, model_type='rf')
+                    
+                    if lstm_pred is not None or rf_pred is not None:
+                        predictions[feat] = {
+                            'lstm': lstm_pred.tolist() if lstm_pred is not None else None,
+                            'rf': rf_pred.tolist() if rf_pred is not None else None
+                        }
+                except Exception as pred_err:
+                    print(f"Error predicting {symbol}-{feat}: {str(pred_err)}")
+                    continue
             
             if not predictions:
-                return json.dumps({'error': 'Prediction failed'})
+                error_msg = f"Prediction failed for {symbol}. Models may still be training or there might be issues with the data."
+                print(error_msg)
+                return json.dumps({'error': error_msg})
                 
-            plot_data = self.get_plot_data(symbol, feature, target_date)
+            try:
+                plot_data = self.get_plot_data(symbol, feature, target_date)
+                if not plot_data or not plot_data.get('features'):
+                    print(f"No plot data available for {symbol}")
+                    plot_data = {'features': {}, 'dates': []}
+            except Exception as plot_err:
+                print(f"Error getting plot data: {str(plot_err)}")
+                plot_data = {'features': {}, 'dates': []}
             
             # Determine which day to report in message
             day_idx = 0
             if target_date:
                 date_obj = self._parse_date(target_date)
                 today = datetime.now()
-                days_diff = (date_obj.date() - today.date()).days
+                days_diff = (date_obj.date() - today.date()).days if date_obj else 0
                 if 0 < days_diff <= 3:
                     day_idx = days_diff - 1
             
             # Build prediction message
             message = f"{symbol} prediction results:\n"
             
-            for feat, pred in predictions.items():
-                lstm_val = pred['lstm'][day_idx] if pred['lstm'] else None
-                rf_val = pred['rf'][day_idx] if pred['rf'] else None
-                
-                if lstm_val is not None or rf_val is not None:
-                    message += f"\n{feat}:\n"
-                    if lstm_val is not None:
-                        message += f"LSTM model: ${lstm_val:.2f}\n"
-                    if rf_val is not None:
-                        message += f"Random Forest model: ${rf_val:.2f}\n"
-                
+            if not predictions:
+                message += "\nNo predictions available at this time. The models might still be training."
+            else:
+                for feat, pred in predictions.items():
+                    lstm_val = pred['lstm'][day_idx] if pred['lstm'] else None
+                    rf_val = pred['rf'][day_idx] if pred['rf'] else None
+                    
+                    if lstm_val is not None or rf_val is not None:
+                        message += f"\n{feat}:\n"
+                        if lstm_val is not None:
+                            message += f"LSTM model: ${lstm_val:.2f}\n"
+                        if rf_val is not None:
+                            message += f"Random Forest model: ${rf_val:.2f}\n"
+            
+            print(f"Successfully generated prediction response for {symbol}")
             return json.dumps({
                 'symbol': symbol,
                 'feature': feature,
@@ -544,7 +758,11 @@ class OracleServer:
             })
             
         except Exception as e:
-            return json.dumps({'error': str(e)})
+            error_msg = f"Error processing request: {str(e)}"
+            print(error_msg)
+            import traceback
+            traceback.print_exc()
+            return json.dumps({'error': error_msg})
     
 
 oracle = OracleServer()
@@ -597,30 +815,6 @@ def get_symbols():
     return jsonify({
         'symbols': symbols
     })
-
-@app.route('/add_symbol', methods=['POST'])
-def add_symbol():
-    """API endpoint to add a new symbol"""
-    try:
-        data = request.json
-        symbol = data.get('symbol', '').upper().strip()
-        
-        if not symbol:
-            return jsonify({
-                'success': False,
-                'message': 'No symbol provided'
-            })
-        
-        success, message = oracle.add_new_symbol(symbol)
-        return jsonify({
-            'success': success,
-            'message': message
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        })
 
 if __name__ == "__main__":
     oracle.load_resources()

@@ -454,6 +454,10 @@
         <div class="container header-content">
             <div class="logo">Stock Prediction Oracle</div>
             <div class="header-controls">
+                <div class="server-status-container" style="display: flex; align-items: center; margin-right: 15px;">
+                    <div id="server-status-indicator" style="width: 12px; height: 12px; border-radius: 50%; background-color: #d62728; margin-right: 5px;"></div>
+                    <span id="server-status-text">Offline</span>
+                </div>
                 <span id="loading-indicator" class="loading-indicator">Updating...</span>
                 <div id="progress-container" class="progress-container">
                     <div class="progress-bar">
@@ -540,6 +544,7 @@
         let currentChartType = 'line';
         let fullscreenChart = null;
         let currentFullscreenData = null;
+        let serverConnectionCheckInterval = null;
         
         // Initialize UI elements
         document.getElementById('send-btn').addEventListener('click', sendMessage);
@@ -566,7 +571,32 @@
         // Load available symbols on page load
         window.addEventListener('DOMContentLoaded', function() {
             loadAvailableSymbols();
+            checkServerConnection();
+            
+            // Start periodic server connection check
+            serverConnectionCheckInterval = setInterval(checkServerConnection, 10000);
         });
+        
+        function checkServerConnection() {
+            const statusIndicator = document.getElementById('server-status-indicator');
+            const statusText = document.getElementById('server-status-text');
+            
+            fetch('http://localhost:5001/symbols', { timeout: 5000 })
+                .then(response => {
+                    if (response.ok) {
+                        statusIndicator.style.backgroundColor = '#2ca02c'; // Green for connected
+                        statusText.textContent = 'Connected';
+                    } else {
+                        statusIndicator.style.backgroundColor = '#d62728'; // Red for error
+                        statusText.textContent = 'Connection Error';
+                    }
+                })
+                .catch(error => {
+                    console.error('Server connection error:', error);
+                    statusIndicator.style.backgroundColor = '#d62728'; // Red for disconnected
+                    statusText.textContent = 'Offline';
+                });
+        }
         
         function loadAvailableSymbols() {
             fetch('http://localhost:5001/symbols')

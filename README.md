@@ -6,4 +6,4 @@
 
 3. Run `server.py` to start the server.  
 
-4. Open the HTML file, wait for it to connect to the server, input the desired information, and obtain the prediction results.
+4. Open 'index.html', wait for it to connect to the server, input the desired information, and obtain the prediction results.

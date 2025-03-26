@@ -1,18 +1,9 @@
-### 步骤
+### Steps  
 
-1、运行`data_preparation.py`，自动下载苹果和微软的股票dataset
+1. Run `data_preparation.py` to automatically download stock datasets for Apple (AAPL) and Microsoft (MSFT).  
 
-2、运行`train_model.py`，训练模型，并且保存
+2. Run `train_model.py` to train the model and save it.  
 
-3、运行`server.py`服务器，下面的指令在终端运行，路径要改一下
+3. Run `server.py` to start the server.  
 
-```
-cd C:\Users\Administrator\Desktop\ELEC && Start-Process powershell -ArgumentList "-NoExit", "-Command", "python server.py"
-```
-
-
-
-4、运行html，输入apple（aapl）或者microsoft（msft），得到预测结果
-
-
-
+4. Open the HTML file, wait for it to connect to the server, input the desired information, and obtain the prediction results.
